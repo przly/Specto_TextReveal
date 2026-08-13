@@ -613,13 +613,13 @@ export default function App() {
   const startDelay = DEFAULT_HEADLINE_OFFSET;
   const [showReferenceBackground, setShowReferenceBackground] = useState(() => {
     if (typeof window === 'undefined') {
-      return true;
+      return false;
     }
 
     const savedValue = window.localStorage.getItem(SHOW_REFERENCE_BG_STORAGE_KEY);
 
     if (savedValue === null) {
-      return true;
+      return false;
     }
 
     return savedValue === 'true';
@@ -640,13 +640,13 @@ export default function App() {
   });
   const [showTriggerGuide, setShowTriggerGuide] = useState(() => {
     if (typeof window === 'undefined') {
-      return true;
+      return false;
     }
 
     const savedValue = window.localStorage.getItem(SHOW_TRIGGER_GUIDE_STORAGE_KEY);
 
     if (savedValue === null) {
-      return true;
+      return false;
     }
 
     return savedValue === 'true';
