@@ -269,20 +269,11 @@ function useTriggerLineState<T extends HTMLElement = HTMLElement>(
 
       const rect = ref.current.getBoundingClientRect();
       const triggerLine = window.innerHeight + triggerYOffset;
-      const isCompletelyOutOfView = rect.bottom <= 0 || rect.top >= window.innerHeight;
       const hasCrossedTriggerLine = rect.top <= triggerLine;
 
-      setIsTriggered((currentState) => {
-        if (isCompletelyOutOfView) {
-          return false;
-        }
-
-        if (currentState) {
-          return true;
-        }
-
-        return hasCrossedTriggerLine;
-      });
+      // Once triggered, stays triggered — scrolling back up (even fully out
+      // of view) must not replay the reveal.
+      setIsTriggered((currentState) => currentState || hasCrossedTriggerLine);
     };
 
     updateTriggerState();
