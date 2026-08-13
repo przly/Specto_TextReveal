@@ -206,7 +206,7 @@ const SPECTO_TITLE_STAGGER = SPECTO_TITLE_DURATION * SPECTO_TITLE_STAGGER_FRACTI
 // Per-WORD stagger — independent from SPECTO_TITLE_STAGGER above, so line-
 // mode and word-mode timing can be tuned separately. Used by the hero
 // duplicate block's revealBy="word" headline + body.
-const HERO_DUPLICATE_WORD_STAGGER = 0.03;
+const HERO_DUPLICATE_WORD_STAGGER = 0.02;
 
 // The "Why us?" corner arrow starts sliding in before the title's own
 // reveal fully settles — expo-out front-loads the motion, so the title
@@ -529,11 +529,15 @@ function SpectoRevealParagraph({
                     {word}
                   </motion.span>
                 </span>
-                {/* Real space, sized via the same `.hero-line` typography
-                    rules the words use, so the gap matches the font's
-                    actual glyph width instead of an approximated margin. */}
+                {/* Real, collapsible space (not &nbsp;) sized via the same
+                    `.hero-line` typography rules the words use, so the gap
+                    matches the font's actual glyph width instead of an
+                    approximated margin — and, being collapsible, the
+                    browser trims it at a line-wrap exactly like normal
+                    text, keeping every wrapped line flush left the same
+                    way line-mode's do. */}
                 {index < words.length - 1 ? (
-                  <span className="hero-line hero-word-space">&nbsp;</span>
+                  <span className="hero-line hero-word-space"> </span>
                 ) : null}
               </Fragment>
             ))

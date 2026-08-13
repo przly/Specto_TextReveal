@@ -248,11 +248,12 @@ body::after {
   /* Each word gets its own shrink-wrapped clip box (unlike line-mode, where
      the whole line shares one box) — so glyph ink that overhangs its own
      advance width (a "y"'s diagonal stroke, a "?"'s curl) needs its own
-     horizontal buffer here, or that edge gets clipped. Compensated by an
-     equal negative margin so it doesn't shift word spacing. */
-  padding-left: 0.15em;
+     buffer here, or that edge gets clipped. Right-only: overhang in this
+     font only happens trailing (diagonal/curled strokes lean right); a
+     matching left-side buffer would also work but shifts a negative margin
+     onto the first word of every wrapped line, pulling it left of the
+     paragraph's actual edge and breaking alignment with line-mode text. */
   padding-right: 0.15em;
-  margin-left: -0.15em;
   margin-right: -0.15em;
 }
 
