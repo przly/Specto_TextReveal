@@ -1,7 +1,7 @@
 import { motion, useReducedMotion } from 'motion/react';
 import type { Variants } from 'motion/react';
 import type { CSSProperties, ReactNode, RefObject } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 
 type Column = string[];
 
@@ -202,6 +202,11 @@ const SPECTO_TITLE_DURATION = 1.6;
 const SPECTO_TITLE_STAGGER_FRACTION = 0.06;
 const SPECTO_TITLE_STAGGER = SPECTO_TITLE_DURATION * SPECTO_TITLE_STAGGER_FRACTION;
 
+// The "Why us?" corner arrow starts sliding in before the title's own
+// reveal fully settles — expo-out front-loads the motion, so the title
+// already reads as "arrived" well before its full duration elapses.
+const WHY_US_ARROW_DELAY = SPECTO_TITLE_DURATION * 0.3;
+
 type SpectoLineCustom = {
   index?: number;
   duration?: number;
@@ -320,6 +325,10 @@ function ArrowMark({
 }
 
 
+// The arrow itself only fades in place — the *movement* it appears to make
+// comes from `.why-us-title-wrap`'s own slide (see below), which carries the
+// arrow and title together. Its delay is timed to the title's reveal
+// duration so it only starts once "Why us?" has finished unmasking.
 function CornerArrow({ shouldReduceMotion }: { shouldReduceMotion: boolean | null }) {
   return (
     <motion.span
@@ -327,14 +336,13 @@ function CornerArrow({ shouldReduceMotion }: { shouldReduceMotion: boolean | nul
       aria-hidden="true"
       variants={{
         hidden: {
-          x: shouldReduceMotion ? 0 : -100,
           opacity: 0,
         },
         visible: {
-          x: 0,
           opacity: 1,
           transition: {
             duration: shouldReduceMotion ? 0.2 : 0.78,
+            delay: shouldReduceMotion ? 0 : WHY_US_ARROW_DELAY,
             ease: shouldReduceMotion ? 'easeOut' : easeExpoOut,
           },
         },
@@ -457,6 +465,7 @@ function SpectoRevealParagraph({
   isTriggered: externalIsTriggered,
   startIndex = 0,
   onLineCountChange,
+  revealBy = 'line',
 }: {
   text: string;
   className?: string;
@@ -469,6 +478,10 @@ function SpectoRevealParagraph({
   // stagger as one continuous sequence rather than each restarting at 0.
   startIndex?: number;
   onLineCountChange?: (count: number) => void;
+  // 'word' reuses the same mask-slide trick per word instead of per line —
+  // each word gets its own `.hero-word-wrap` clip window and staggers
+  // individually, while the browser still wraps them naturally.
+  revealBy?: 'line' | 'word';
 }) {
   const { words, lines, measureRef } = useDetectedLines(text);
   const [ref, internalIsTriggered] = useTriggerLineState<HTMLParagraphElement>(triggerYOffset);
@@ -489,17 +502,41 @@ function SpectoRevealParagraph({
         initial="hidden"
         animate={isTriggered ? 'visible' : 'hidden'}
       >
-        {lines.map((line, index) => (
-          <span className="hero-line-mask" key={`${line}-${index}`}>
-            <motion.span
-              className="hero-line"
-              custom={{ index: startIndex + index, duration, stagger }}
-              variants={variants}
-            >
-              {line}
-            </motion.span>
-          </span>
-        ))}
+        {revealBy === 'word'
+          ? words.map((word, index) => (
+              <Fragment key={`${word}-${index}`}>
+                {/* `hero-line` on the wrap itself (not just the inner span)
+                    so its font-size-driven `--mask-space` padding scales
+                    with this context's actual type size instead of the
+                    inherited ambient default — otherwise descenders clip. */}
+                <span className="hero-word-wrap hero-line">
+                  <motion.span
+                    className="hero-line hero-word"
+                    custom={{ index: startIndex + index, duration, stagger }}
+                    variants={variants}
+                  >
+                    {word}
+                  </motion.span>
+                </span>
+                {/* Real space, sized via the same `.hero-line` typography
+                    rules the words use, so the gap matches the font's
+                    actual glyph width instead of an approximated margin. */}
+                {index < words.length - 1 ? (
+                  <span className="hero-line hero-word-space">&nbsp;</span>
+                ) : null}
+              </Fragment>
+            ))
+          : lines.map((line, index) => (
+              <span className="hero-line-mask hero-line" key={`${line}-${index}`}>
+                <motion.span
+                  className="hero-line"
+                  custom={{ index: startIndex + index, duration, stagger }}
+                  variants={variants}
+                >
+                  {line}
+                </motion.span>
+              </span>
+            ))}
       </motion.p>
     </div>
   );
@@ -815,7 +852,25 @@ export default function App() {
             initial="hidden"
             animate={isWhyUsHeaderTriggered ? 'visible' : 'hidden'}
           >
-            <div className="why-us-title-wrap">
+            <motion.div
+              className="why-us-title-wrap"
+              variants={{
+                // Shifted left by the arrow's own reserved space (width +
+                // gap), so the title sits flush with the image below while
+                // it reveals, as if the arrow weren't there yet.
+                hidden: {
+                  x: shouldReduceMotion ? 0 : 'calc(-1 * var(--why-us-arrow-space))',
+                },
+                visible: {
+                  x: 0,
+                  transition: {
+                    duration: shouldReduceMotion ? 0.2 : 0.78,
+                    delay: shouldReduceMotion ? 0 : WHY_US_ARROW_DELAY,
+                    ease: shouldReduceMotion ? 'easeOut' : easeExpoOut,
+                  },
+                },
+              }}
+            >
               <CornerArrow shouldReduceMotion={shouldReduceMotion} />
               <div id="why-us-title">
                 <SpectoRevealParagraph
@@ -826,9 +881,10 @@ export default function App() {
                   stagger={SPECTO_TITLE_STAGGER}
                   shouldReduceMotion={!!shouldReduceMotion}
                   isTriggered={isWhyUsHeaderTriggered}
+                  revealBy="word"
                 />
               </div>
-            </div>
+            </motion.div>
             <SecondaryButton>See our approach</SecondaryButton>
           </motion.div>
 

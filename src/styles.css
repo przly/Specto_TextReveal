@@ -16,7 +16,7 @@
   --hero-tracking: -0.04em;
   --hero-line-height: 1.02;
   --arrow-size: 30px;
-  --mask-space: 0.5em;
+  --mask-space: 0.65em;
   --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
@@ -239,15 +239,16 @@ body::after {
   vertical-align: baseline;
   padding-bottom: var(--mask-space);
   margin-bottom: calc(var(--mask-space) * -1);
-  margin-right: 0.24em;
 }
 
 .hero-word {
   display: inline-block;
 }
 
-.hero-word-wrap:last-child {
-  margin-right: 0;
+/* Sits between word-wraps as a real space character, sized through the same
+   `.hero-line` typography rules as the words — not masked or animated. */
+.hero-word-space {
+  display: inline;
 }
 
 .hero-headline {
@@ -286,6 +287,9 @@ body::after {
   display: inline-flex;
   align-items: center;
   gap: 36px;
+  /* arrow width (30px) + gap (36px) — the distance the title travels when
+     the corner arrow slides in; kept in sync with those two values. */
+  --why-us-arrow-space: 66px;
 }
 
 /* #why-us-title shrink-wraps to its content by default. Without a floor,
@@ -751,6 +755,8 @@ body::after {
 
   .why-us-title-wrap {
     gap: 20px;
+    /* arrow width (24px) + gap (20px) at this breakpoint */
+    --why-us-arrow-space: 44px;
   }
 
   #why-us-title {
