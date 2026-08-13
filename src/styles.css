@@ -193,6 +193,12 @@ body::after {
   column-gap: var(--intro-gap, 22px);
 }
 
+.hero-duplicate-block {
+  display: grid;
+  gap: 0.12em;
+  margin-top: 120px;
+}
+
 .arrow-mark {
   width: var(--arrow-size);
   height: var(--arrow-size);

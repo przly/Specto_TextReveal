@@ -200,12 +200,23 @@ const SPECTO_BODY_DURATION = 1.3;
 const SPECTO_BODY_STAGGER = 0.06;
 const SPECTO_TITLE_DURATION = 1.6;
 const SPECTO_TITLE_STAGGER_FRACTION = 0.06;
+// Per-LINE stagger — used by every revealBy="line" (the default) instance
+// on the site, including the hero headline/body block above the duplicate.
 const SPECTO_TITLE_STAGGER = SPECTO_TITLE_DURATION * SPECTO_TITLE_STAGGER_FRACTION;
+// Per-WORD stagger — independent from SPECTO_TITLE_STAGGER above, so line-
+// mode and word-mode timing can be tuned separately. Used by the hero
+// duplicate block's revealBy="word" headline + body.
+const HERO_DUPLICATE_WORD_STAGGER = 0.03;
 
 // The "Why us?" corner arrow starts sliding in before the title's own
 // reveal fully settles — expo-out front-loads the motion, so the title
 // already reads as "arrived" well before its full duration elapses.
 const WHY_US_ARROW_DELAY = SPECTO_TITLE_DURATION * 0.3;
+
+// Tighter than SPECTO_TITLE_STAGGER (which lines elsewhere on the site
+// share) so "Why" and "us?" reveal closer together instead of one clearly
+// trailing the other.
+const WHY_US_WORD_STAGGER = 0.04;
 
 type SpectoLineCustom = {
   index?: number;
@@ -689,6 +700,7 @@ export default function App() {
     return savedValue === 'true';
   });
   const [heroRef, isHeroTriggered] = useTriggerLineState(triggerYOffset);
+  const [heroDuplicateRef, isHeroDuplicateTriggered] = useTriggerLineState<HTMLDivElement>(triggerYOffset);
   const [whyUsHeaderRef, isWhyUsHeaderTriggered] = useTriggerLineState<HTMLDivElement>(triggerYOffset);
   // Lets the hero headline + body copy stagger as one continuous sequence.
   const [heroHeadlineLineCount, setHeroHeadlineLineCount] = useState(1);
@@ -841,6 +853,45 @@ export default function App() {
             isTriggered={isHeroTriggered}
             startIndex={heroHeadlineLineCount}
           />
+
+          {/* Duplicate of the whole intro block above (arrow + headline +
+              body), revealed per-word instead of per-line, with its own
+              independent scroll trigger so it animates in on its own as it
+              crosses the trigger line, not in lockstep with the original. */}
+          <motion.div
+            ref={heroDuplicateRef}
+            className="hero-duplicate-block"
+            initial="hidden"
+            animate={isHeroDuplicateTriggered ? 'visible' : 'hidden'}
+          >
+            <div className="hero-intro">
+              <ArrowMark
+                shouldReduceMotion={shouldReduceMotion}
+                animationConfig={animationConfig}
+              />
+              <SpectoRevealParagraph
+                className="hero-headline"
+                text={HERO_HEADLINE_TEXT}
+                triggerYOffset={triggerYOffset}
+                duration={SPECTO_TITLE_DURATION}
+                stagger={HERO_DUPLICATE_WORD_STAGGER}
+                shouldReduceMotion={!!shouldReduceMotion}
+                isTriggered={isHeroDuplicateTriggered}
+                revealBy="word"
+              />
+            </div>
+
+            <SpectoRevealParagraph
+              className="hero-copy"
+              text={HERO_BODY_TEXT}
+              triggerYOffset={triggerYOffset}
+              duration={SPECTO_TITLE_DURATION}
+              stagger={HERO_DUPLICATE_WORD_STAGGER}
+              shouldReduceMotion={!!shouldReduceMotion}
+              isTriggered={isHeroDuplicateTriggered}
+              revealBy="word"
+            />
+          </motion.div>
         </motion.section>
       </section>
 
@@ -878,7 +929,7 @@ export default function App() {
                   text="Why us?"
                   triggerYOffset={triggerYOffset}
                   duration={SPECTO_TITLE_DURATION}
-                  stagger={SPECTO_TITLE_STAGGER}
+                  stagger={WHY_US_WORD_STAGGER}
                   shouldReduceMotion={!!shouldReduceMotion}
                   isTriggered={isWhyUsHeaderTriggered}
                   revealBy="word"
