@@ -239,6 +239,15 @@ body::after {
   vertical-align: baseline;
   padding-bottom: var(--mask-space);
   margin-bottom: calc(var(--mask-space) * -1);
+  /* Each word gets its own shrink-wrapped clip box (unlike line-mode, where
+     the whole line shares one box) — so glyph ink that overhangs its own
+     advance width (a "y"'s diagonal stroke, a "?"'s curl) needs its own
+     horizontal buffer here, or that edge gets clipped. Compensated by an
+     equal negative margin so it doesn't shift word spacing. */
+  padding-left: 0.15em;
+  padding-right: 0.15em;
+  margin-left: -0.15em;
+  margin-right: -0.15em;
 }
 
 .hero-word {
