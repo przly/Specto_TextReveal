@@ -626,17 +626,17 @@ export default function App() {
   });
   const [triggerYOffset, setTriggerYOffset] = useState(() => {
     if (typeof window === 'undefined') {
-      return -150;
+      return 0;
     }
 
     const savedValue = window.localStorage.getItem(TRIGGER_Y_OFFSET_STORAGE_KEY);
     if (savedValue === null) {
-      return -150;
+      return 0;
     }
 
     const parsedValue = Number(savedValue);
 
-    return Number.isFinite(parsedValue) ? parsedValue : -150;
+    return Number.isFinite(parsedValue) ? parsedValue : 0;
   });
   const [showTriggerGuide, setShowTriggerGuide] = useState(() => {
     if (typeof window === 'undefined') {
