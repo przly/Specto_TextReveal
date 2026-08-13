@@ -509,7 +509,7 @@ function SpectoRevealParagraph({
 
       <motion.p
         ref={ref}
-        className={className}
+        className={`${className}${revealBy === 'word' ? ' specto-paragraph-word-mode' : ''}`}
         initial="hidden"
         animate={isTriggered ? 'visible' : 'hidden'}
       >

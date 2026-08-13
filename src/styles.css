@@ -239,6 +239,16 @@ body::after {
   will-change: transform, opacity;
 }
 
+/* Word-mode's children are inline-block, unlike line-mode's block-level
+   `.hero-line-mask`s — so the paragraph's own invisible "strut" (sized off
+   the browser's default line-height, since nothing here sets one) adds its
+   own descent to every wrapped line's height on top of the words' own,
+   inflating line spacing beyond line-mode's. Zeroing it out here removes
+   that extra contribution, so only the words' own line-height counts. */
+.specto-paragraph-word-mode {
+  line-height: 0;
+}
+
 .hero-word-wrap {
   display: inline-block;
   overflow: clip;
