@@ -143,6 +143,26 @@ body::after {
   text-align: right;
 }
 
+.tuning-text-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid rgba(245, 245, 245, 0.16);
+  border-radius: 8px;
+  background: rgba(245, 245, 245, 0.06);
+  color: var(--page-fg);
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+
+.tuning-text-input::placeholder {
+  color: rgba(245, 245, 245, 0.4);
+}
+
+.tuning-text-input:focus {
+  outline: none;
+  border-color: rgba(245, 245, 245, 0.4);
+}
+
 .scroll-spacer {
   min-height: 108vh;
 }
@@ -196,6 +216,10 @@ body::after {
 .hero-duplicate-block {
   display: grid;
   gap: 0.12em;
+  margin-top: 120px;
+}
+
+.hero-custom-preview {
   margin-top: 120px;
 }
 
@@ -287,6 +311,10 @@ body::after {
   margin: 0;
   font-size: var(--hero-size);
   max-width: 22.8em;
+}
+
+.hero-copy-custom {
+  color: rgba(245, 245, 245, 0.58);
 }
 
 .why-us-section {
@@ -627,6 +655,7 @@ body::after {
   line-height: 1;
   letter-spacing: -0.02em;
 }
+
 
 .line-measure {
   position: absolute;

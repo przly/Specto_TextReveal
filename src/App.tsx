@@ -1,7 +1,8 @@
 import { motion, useReducedMotion } from 'motion/react';
-import type { Variants } from 'motion/react';
-import type { CSSProperties, ReactNode, RefObject } from 'react';
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import { useEffect, useState } from 'react';
+
+import { RevealText, easeExpoOut, useRevealTrigger } from './RevealText';
 
 type Column = string[];
 
@@ -173,6 +174,9 @@ const DEFAULT_HEADLINE_OFFSET = 0.04;
 const SHOW_REFERENCE_BG_STORAGE_KEY = 'specto-show-reference-bg';
 const TRIGGER_Y_OFFSET_STORAGE_KEY = 'specto-trigger-y-offset';
 const SHOW_TRIGGER_GUIDE_STORAGE_KEY = 'specto-show-trigger-guide';
+const CUSTOM_PREVIEW_TEXT_STORAGE_KEY = 'specto-custom-preview-text';
+const CUSTOM_PREVIEW_TEXT_PLACEHOLDER =
+  'Type something in the control panel to preview it here.';
 
 function getCopyVariantForWidth(width: number): CopyVariant {
   if (width <= 720) {
@@ -189,8 +193,6 @@ function getCopyVariantForWidth(width: number): CopyVariant {
 
   return COPY_VARIANTS.desktop;
 }
-
-const easeExpoOut = (t: number) => (t === 1 ? 1 : 1 - Math.pow(2, -10 * t));
 
 // Two reveal engines depending on scale, both on the same expo-out curve:
 //  - body copy (scroll-triggered paragraphs): 1300ms, 60ms fixed per-line stagger
@@ -217,78 +219,6 @@ const WHY_US_ARROW_DELAY = SPECTO_TITLE_DURATION * 0.3;
 // share) so "Why" and "us?" reveal closer together instead of one clearly
 // trailing the other.
 const WHY_US_WORD_STAGGER = 0.04;
-
-type SpectoLineCustom = {
-  index?: number;
-  duration?: number;
-  stagger?: number;
-};
-
-// Hidden offset is well past 100% of the line's own height so it still
-// fully clears the mask even after --mask-space pads the clip window taller
-// (up to 0.8em on a line-height:1 block — see the "Descender Space" slider).
-const spectoLineVariants: Variants = {
-  hidden: { y: '200%' },
-  visible: ({
-    index = 0,
-    duration = SPECTO_BODY_DURATION,
-    stagger = SPECTO_BODY_STAGGER,
-  }: SpectoLineCustom) => ({
-    y: '-7%',
-    transition: {
-      duration,
-      delay: index * stagger,
-      ease: easeExpoOut,
-    },
-  }),
-};
-
-const reducedSpectoLineVariants: Variants = {
-  hidden: { opacity: 0 },
-  visible: ({ index = 0, stagger = SPECTO_BODY_STAGGER }: SpectoLineCustom) => ({
-    opacity: 1,
-    transition: {
-      duration: 0.24,
-      delay: index * Math.min(stagger, 0.05),
-      ease: 'easeOut',
-    },
-  }),
-};
-
-function useTriggerLineState<T extends HTMLElement = HTMLElement>(
-  triggerYOffset: number,
-): [RefObject<T>, boolean] {
-  const ref = useRef<T>(null);
-  const [isTriggered, setIsTriggered] = useState(false);
-
-  useEffect(() => {
-    const updateTriggerState = () => {
-      if (!ref.current) {
-        return;
-      }
-
-      const rect = ref.current.getBoundingClientRect();
-      const triggerLine = window.innerHeight + triggerYOffset;
-      const hasCrossedTriggerLine = rect.top <= triggerLine;
-
-      // Once triggered, stays triggered — scrolling back up (even fully out
-      // of view) must not replay the reveal.
-      setIsTriggered((currentState) => currentState || hasCrossedTriggerLine);
-    };
-
-    updateTriggerState();
-
-    window.addEventListener('scroll', updateTriggerState, { passive: true });
-    window.addEventListener('resize', updateTriggerState);
-
-    return () => {
-      window.removeEventListener('scroll', updateTriggerState);
-      window.removeEventListener('resize', updateTriggerState);
-    };
-  }, [triggerYOffset]);
-
-  return [ref, isTriggered];
-}
 
 function ArrowMark({
   shouldReduceMotion,
@@ -372,213 +302,32 @@ function SecondaryButton({ children }: { children?: ReactNode }) {
   );
 }
 
-// Detects the browser's *actual* wrapped lines at the current width, rather
-// than relying on hand-authored breakpoints, by measuring rendered word
-// positions before masking them.
-function useDetectedLines(text: string) {
-  const words = useMemo(() => text.split(/\s+/).filter(Boolean), [text]);
-  const measureRef = useRef<HTMLParagraphElement>(null);
-  const [lines, setLines] = useState<string[]>([]);
-
-  useEffect(() => {
-    const container = measureRef.current;
-    if (!container) {
-      return;
-    }
-
-    let frame = 0;
-
-    const measure = () => {
-      const wordEls = Array.from(container.querySelectorAll<HTMLSpanElement>('[data-word]'));
-      const grouped: string[][] = [];
-      let lastTop: number | null = null;
-
-      wordEls.forEach((el) => {
-        const top = el.offsetTop;
-        if (lastTop === null || Math.abs(top - lastTop) > 1) {
-          grouped.push([]);
-          lastTop = top;
-        }
-        grouped[grouped.length - 1].push(el.textContent ?? '');
-      });
-
-      setLines(grouped.map((group) => group.join(' ')));
-    };
-
-    const scheduleMeasure = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(measure);
-    };
-
-    scheduleMeasure();
-    document.fonts?.ready?.then(scheduleMeasure);
-
-    const resizeObserver = new ResizeObserver(scheduleMeasure);
-    resizeObserver.observe(container);
-
-    return () => {
-      cancelAnimationFrame(frame);
-      resizeObserver.disconnect();
-    };
-  }, [words]);
-
-  return { words, lines, measureRef };
-}
-
-// Invisible twin used only to measure where the browser wraps `words`.
-// Typography is scoped site-wide as `.context .hero-line{...}` (a
-// descendant selector), so `hero-line` must land on a genuine descendant
-// here too — putting it on this <p> itself (alongside `className`) would
-// never match, since a compound selector isn't a descendant of itself.
-function LineMeasureLayer({
-  measureRef,
-  words,
-  className = '',
-}: {
-  measureRef: RefObject<HTMLParagraphElement>;
-  words: string[];
-  className?: string;
-}) {
-  return (
-    <p ref={measureRef} className={`line-measure ${className}`.trim()} aria-hidden="true">
-      <span className="hero-line">
-        {words.map((word, index) => (
-          <span data-word className="line-measure-word" key={index}>
-            {word}{' '}
-          </span>
-        ))}
-      </span>
-    </p>
-  );
-}
-
-// The single text-reveal primitive for the whole app: auto-detects real
-// line breaks, then reveals each one with the Specto engine. Renders with
-// the same `.hero-line-mask`/`.hero-line` classes the rest of the site
-// already scopes typography through (`.why-us-card-title .hero-line`, etc.)
-// so this is a drop-in for whatever context class it's given.
-function SpectoRevealParagraph({
-  text,
-  className = '',
-  triggerYOffset,
-  duration,
-  stagger,
-  shouldReduceMotion = false,
-  isTriggered: externalIsTriggered,
-  startIndex = 0,
-  onLineCountChange,
-  revealBy = 'line',
-}: {
-  text: string;
-  className?: string;
-  triggerYOffset: number;
-  duration?: number;
-  stagger?: number;
-  shouldReduceMotion?: boolean;
-  isTriggered?: boolean;
-  // Lets two visually-separate blocks (e.g. hero headline + body copy)
-  // stagger as one continuous sequence rather than each restarting at 0.
-  startIndex?: number;
-  onLineCountChange?: (count: number) => void;
-  // 'word' reuses the same mask-slide trick per word instead of per line —
-  // each word gets its own `.hero-word-wrap` clip window and staggers
-  // individually, while the browser still wraps them naturally.
-  revealBy?: 'line' | 'word';
-}) {
-  const { words, lines, measureRef } = useDetectedLines(text);
-  const [ref, internalIsTriggered] = useTriggerLineState<HTMLParagraphElement>(triggerYOffset);
-  const isTriggered = externalIsTriggered ?? internalIsTriggered;
-  const variants = shouldReduceMotion ? reducedSpectoLineVariants : spectoLineVariants;
-
-  useEffect(() => {
-    onLineCountChange?.(lines.length);
-  }, [lines.length, onLineCountChange]);
-
-  return (
-    <div className="specto-paragraph-wrap">
-      <LineMeasureLayer measureRef={measureRef} words={words} className={className} />
-
-      <motion.p
-        ref={ref}
-        className={`${className}${revealBy === 'word' ? ' specto-paragraph-word-mode' : ''}`}
-        initial="hidden"
-        animate={isTriggered ? 'visible' : 'hidden'}
-      >
-        {revealBy === 'word'
-          ? words.map((word, index) => (
-              <Fragment key={`${word}-${index}`}>
-                {/* `hero-line` on the wrap itself (not just the inner span)
-                    so its font-size-driven `--mask-space` padding scales
-                    with this context's actual type size instead of the
-                    inherited ambient default — otherwise descenders clip. */}
-                <span className="hero-word-wrap hero-line">
-                  <motion.span
-                    className="hero-line hero-word"
-                    custom={{ index: startIndex + index, duration, stagger }}
-                    variants={variants}
-                  >
-                    {word}
-                  </motion.span>
-                </span>
-                {/* Real, collapsible space (not &nbsp;) sized via the same
-                    `.hero-line` typography rules the words use, so the gap
-                    matches the font's actual glyph width instead of an
-                    approximated margin — and, being collapsible, the
-                    browser trims it at a line-wrap exactly like normal
-                    text, keeping every wrapped line flush left the same
-                    way line-mode's do. */}
-                {index < words.length - 1 ? (
-                  <span className="hero-line hero-word-space"> </span>
-                ) : null}
-              </Fragment>
-            ))
-          : lines.map((line, index) => (
-              <span className="hero-line-mask hero-line" key={`${line}-${index}`}>
-                <motion.span
-                  className="hero-line"
-                  custom={{ index: startIndex + index, duration, stagger }}
-                  variants={variants}
-                >
-                  {line}
-                </motion.span>
-              </span>
-            ))}
-      </motion.p>
-    </div>
-  );
-}
-
 function TextStudyBlock({
   block,
-  shouldReduceMotion,
   triggerYOffset,
   showReferenceBackground,
 }: {
   block: TextStudyBlockData;
-  shouldReduceMotion: boolean | null;
   triggerYOffset: number;
   showReferenceBackground: boolean;
 }) {
   return (
-    <SpectoRevealParagraph
+    <RevealText
       className={`${block.className}${showReferenceBackground ? ' hero-reference-bg' : ''}`}
       text={block.text}
-      triggerYOffset={triggerYOffset}
+      triggerMargin={triggerYOffset}
       duration={block.scale === 'title' ? SPECTO_TITLE_DURATION : SPECTO_BODY_DURATION}
       stagger={block.scale === 'title' ? SPECTO_TITLE_STAGGER : SPECTO_BODY_STAGGER}
-      shouldReduceMotion={!!shouldReduceMotion}
     />
   );
 }
 
 function WhyUsCard({
   card,
-  shouldReduceMotion,
   showReferenceBackground,
   triggerYOffset,
 }: {
   card: WhyUsCardData;
-  shouldReduceMotion: boolean | null;
   showReferenceBackground: boolean;
   triggerYOffset: number;
 }) {
@@ -596,13 +345,12 @@ function WhyUsCard({
             showReferenceBackground ? ' hero-reference-bg' : ''
           }`}
         >
-          <SpectoRevealParagraph
+          <RevealText
             className="why-us-card-title"
             text={card.title}
-            triggerYOffset={triggerYOffset}
+            triggerMargin={triggerYOffset}
             duration={SPECTO_TITLE_DURATION}
             stagger={SPECTO_TITLE_STAGGER}
-            shouldReduceMotion={!!shouldReduceMotion}
           />
         </div>
 
@@ -623,13 +371,12 @@ function WhyUsCard({
                   key={`${paragraph.slice(0, 24)}-${paragraphIndex}`}
                   className="why-us-card-paragraph"
                 >
-                  <SpectoRevealParagraph
+                  <RevealText
                     className="why-us-card-body"
                     text={paragraph}
-                    triggerYOffset={triggerYOffset}
+                    triggerMargin={triggerYOffset}
                     duration={SPECTO_BODY_DURATION}
                     stagger={SPECTO_BODY_STAGGER}
-                    shouldReduceMotion={!!shouldReduceMotion}
                   />
                 </div>
               ))}
@@ -694,9 +441,16 @@ export default function App() {
 
     return savedValue === 'true';
   });
-  const [heroRef, isHeroTriggered] = useTriggerLineState(triggerYOffset);
-  const [heroDuplicateRef, isHeroDuplicateTriggered] = useTriggerLineState<HTMLDivElement>(triggerYOffset);
-  const [whyUsHeaderRef, isWhyUsHeaderTriggered] = useTriggerLineState<HTMLDivElement>(triggerYOffset);
+  const [customPreviewText, setCustomPreviewText] = useState(() => {
+    if (typeof window === 'undefined') {
+      return '';
+    }
+
+    return window.localStorage.getItem(CUSTOM_PREVIEW_TEXT_STORAGE_KEY) ?? '';
+  });
+  const [heroRef, isHeroTriggered] = useRevealTrigger(triggerYOffset);
+  const [heroDuplicateRef, isHeroDuplicateTriggered] = useRevealTrigger<HTMLDivElement>(triggerYOffset);
+  const [whyUsHeaderRef, isWhyUsHeaderTriggered] = useRevealTrigger<HTMLDivElement>(triggerYOffset);
   // Lets the hero headline + body copy stagger as one continuous sequence.
   const [heroHeadlineLineCount, setHeroHeadlineLineCount] = useState(1);
   useEffect(() => {
@@ -737,6 +491,10 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem(SHOW_TRIGGER_GUIDE_STORAGE_KEY, String(showTriggerGuide));
   }, [showTriggerGuide]);
+
+  useEffect(() => {
+    window.localStorage.setItem(CUSTOM_PREVIEW_TEXT_STORAGE_KEY, customPreviewText);
+  }, [customPreviewText]);
 
   const triggerLinePosition = `calc(100vh + ${triggerYOffset}px)`;
 
@@ -800,6 +558,20 @@ export default function App() {
             </output>
           </div>
         </div>
+
+        <div className="tuning-group">
+          <label className="tuning-label" htmlFor="custom-preview-text">
+            Custom Preview Text
+          </label>
+          <input
+            id="custom-preview-text"
+            className="tuning-text-input"
+            type="text"
+            placeholder="Paste your own text…"
+            value={customPreviewText}
+            onChange={(event) => setCustomPreviewText(event.target.value)}
+          />
+        </div>
       </div>
 
       <section className="intro-marker" aria-label="Scroll reference">
@@ -826,25 +598,23 @@ export default function App() {
               shouldReduceMotion={shouldReduceMotion}
               animationConfig={animationConfig}
             />
-            <SpectoRevealParagraph
+            <RevealText
               className="hero-headline"
               text={HERO_HEADLINE_TEXT}
-              triggerYOffset={triggerYOffset}
+              triggerMargin={triggerYOffset}
               duration={SPECTO_TITLE_DURATION}
               stagger={SPECTO_TITLE_STAGGER}
-              shouldReduceMotion={!!shouldReduceMotion}
               isTriggered={isHeroTriggered}
-              onLineCountChange={setHeroHeadlineLineCount}
+              onCountChange={setHeroHeadlineLineCount}
             />
           </div>
 
-          <SpectoRevealParagraph
+          <RevealText
             className="hero-copy"
             text={HERO_BODY_TEXT}
-            triggerYOffset={triggerYOffset}
+            triggerMargin={triggerYOffset}
             duration={SPECTO_TITLE_DURATION}
             stagger={SPECTO_TITLE_STAGGER}
-            shouldReduceMotion={!!shouldReduceMotion}
             isTriggered={isHeroTriggered}
             startIndex={heroHeadlineLineCount}
           />
@@ -864,29 +634,41 @@ export default function App() {
                 shouldReduceMotion={shouldReduceMotion}
                 animationConfig={animationConfig}
               />
-              <SpectoRevealParagraph
+              <RevealText
                 className="hero-headline"
                 text={HERO_HEADLINE_TEXT}
-                triggerYOffset={triggerYOffset}
+                triggerMargin={triggerYOffset}
                 duration={SPECTO_TITLE_DURATION}
                 stagger={HERO_DUPLICATE_WORD_STAGGER}
-                shouldReduceMotion={!!shouldReduceMotion}
                 isTriggered={isHeroDuplicateTriggered}
-                revealBy="word"
+                by="word"
               />
             </div>
 
-            <SpectoRevealParagraph
+            <RevealText
               className="hero-copy"
               text={HERO_BODY_TEXT}
-              triggerYOffset={triggerYOffset}
+              triggerMargin={triggerYOffset}
               duration={SPECTO_TITLE_DURATION}
               stagger={HERO_DUPLICATE_WORD_STAGGER}
-              shouldReduceMotion={!!shouldReduceMotion}
               isTriggered={isHeroDuplicateTriggered}
-              revealBy="word"
+              by="word"
             />
           </motion.div>
+
+          {/* Custom preview block, sitting below both "Specto is a
+              design..." blocks above — its own independent scroll
+              trigger, not chained to either one's stagger sequence. */}
+          <div className="hero-custom-preview">
+            <RevealText
+              className="hero-copy hero-copy-custom"
+              text={customPreviewText.trim() ? customPreviewText : CUSTOM_PREVIEW_TEXT_PLACEHOLDER}
+              triggerMargin={triggerYOffset}
+              duration={SPECTO_TITLE_DURATION}
+              stagger={HERO_DUPLICATE_WORD_STAGGER}
+              by="word"
+            />
+          </div>
         </motion.section>
       </section>
 
@@ -919,15 +701,14 @@ export default function App() {
             >
               <CornerArrow shouldReduceMotion={shouldReduceMotion} />
               <div id="why-us-title">
-                <SpectoRevealParagraph
+                <RevealText
                   className="why-us-section-title"
                   text="Why us?"
-                  triggerYOffset={triggerYOffset}
+                  triggerMargin={triggerYOffset}
                   duration={SPECTO_TITLE_DURATION}
                   stagger={WHY_US_WORD_STAGGER}
-                  shouldReduceMotion={!!shouldReduceMotion}
                   isTriggered={isWhyUsHeaderTriggered}
-                  revealBy="word"
+                  by="word"
                 />
               </div>
             </motion.div>
@@ -939,7 +720,6 @@ export default function App() {
               <WhyUsCard
                 key={card.title}
                 card={card}
-                shouldReduceMotion={shouldReduceMotion}
                 showReferenceBackground={showReferenceBackground}
                 triggerYOffset={triggerYOffset}
               />
@@ -954,7 +734,6 @@ export default function App() {
             <TextStudyBlock
               key={block.className}
               block={block}
-              shouldReduceMotion={shouldReduceMotion}
               triggerYOffset={triggerYOffset}
               showReferenceBackground={showReferenceBackground}
             />
@@ -967,15 +746,15 @@ export default function App() {
           <p className="specto-reveal-label">Specto reveal engine</p>
 
           <div className="specto-reveal-wide">
-            <SpectoRevealParagraph
-              triggerYOffset={triggerYOffset}
+            <RevealText
+              triggerMargin={triggerYOffset}
               className="specto-paragraph-xl"
               text="Sint commodo magna officia sit ea excepteur sint enim incididunt."
               duration={SPECTO_TITLE_DURATION}
               stagger={SPECTO_TITLE_STAGGER}
             />
-            <SpectoRevealParagraph
-              triggerYOffset={triggerYOffset}
+            <RevealText
+              triggerMargin={triggerYOffset}
               className="specto-paragraph-lg"
               text="Sint commodo magna officia sit ea excepteur sint enim. Incididunt anim consectetur nulla sint esse eu consectetur. Nisi enim est consequat eiusmod laboris laborum exercitation pariatur enim sunt eiusmod nostrud incididunt nostrud nisi."
               duration={SPECTO_TITLE_DURATION}
@@ -984,8 +763,8 @@ export default function App() {
           </div>
 
           <div className="specto-reveal-shell">
-            <SpectoRevealParagraph
-              triggerYOffset={triggerYOffset}
+            <RevealText
+              triggerMargin={triggerYOffset}
               className="specto-paragraph-body"
               text="Each line here masks and slides up from 113% down to a slight -7% overshoot before settling — eased with a pure exponential curve, staggered 60ms apart, and triggered only once it scrolls into view. Every line is detected from the browser's actual word-wrap, so it re-splits correctly at any breakpoint instead of relying on hand-authored line breaks."
             />
