@@ -1,17 +1,9 @@
-@font-face {
-  font-family: 'Aeonik';
-  src: url('/fonts/Aeonik-Regular.otf') format('opentype');
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-}
-
 :root {
   --page-bg: #020202;
   --page-fg: #f5f5f5;
   --page-border: rgba(245, 245, 245, 0.28);
   --content-width: min(1464px, calc(100vw - 32px));
-  --font-stack: 'Aeonik', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-stack: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --hero-size: clamp(2.8rem, 5.3vw, 3.75rem);
   --hero-tracking: -0.04em;
   --hero-line-height: 1.02;
