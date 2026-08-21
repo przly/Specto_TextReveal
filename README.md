@@ -25,8 +25,9 @@ rules — there's no build step or package to publish, just copy both over.
 
 2. **Copy `src/RevealText.tsx`** into the target project as-is. It exports
    `RevealText` (the component) and `useRevealTrigger` (the trigger hook,
-   for cases where a parent needs to drive `isTriggered` itself — see
-   [Trigger](#5-trigger-userevealtrigger) below).
+   for cases where a parent needs to drive `isTriggered` itself, e.g. to
+   share one trigger across multiple blocks — see the `isTriggered` row in
+   [Props reference](#props-reference)).
 
 3. **Add the required CSS.** Drop this into a global stylesheet (adjust
    `--mask-space` and the font-size/line-height values to taste — the
@@ -122,77 +123,6 @@ naturally.
 />
 ```
 
-### How it works
-
-**1. Line detection (`useDetectedLines`)**
-Before anything is animated, the text is rendered once into an invisible
-"measure" twin (`LineMeasureLayer`) at the element's real width. Each word
-is measured via `offsetTop`, and words sharing a `top` are grouped into a
-detected line. This reads the browser's *actual* wrapping at the current
-viewport width instead of relying on hand-authored line breaks, and
-re-measures on resize (`ResizeObserver`) and once web fonts finish loading
-(`document.fonts.ready`), since font metrics can shift line breaks.
-
-**2. Splitting into lines or words (`by` prop)**
-- `by="line"` (default): each detected line is wrapped in a
-  `.hero-line-mask` (a fixed-height, `overflow: clip` box) containing a
-  `motion.span`. The whole line slides as one unit.
-- `by="word"`: each word gets its own `.hero-word-wrap` clip box and
-  animates independently, with a real (collapsible) space character
-  between words so the browser wraps them exactly like normal text. Word
-  mode is what makes a duplicate-block "word cascade" variant possible
-  alongside the line-based one.
-
-**3. The motion itself (`lineVariants`)**
-Each line/word starts at `y: '200%'` (pushed below its own clip box, so
-it's fully hidden) and animates to `y: '-7%'` with a custom expo-out ease
-(`easeExpoOut`). The `-7%` (not `0%`) is a slight overshoot that keeps the
-settle from reading as abrupt. The clip box (`overflow: clip` +
-negative-margin `padding-bottom: var(--mask-space)`) is what actually
-masks the motion — the line/word is genuinely off-screen within its own
-box, not just faded.
-
-**4. Stagger (`custom` + `Variants`)**
-Each line/word is passed `custom={{ index, duration, stagger, delay }}`,
-and the variant computes its own `transition.delay` as
-`delay + index * stagger`. `index` defaults to the line/word's position,
-but can be offset with `startIndex` — this lets two separate `RevealText`
-blocks (e.g. a heading followed by a paragraph) read as one continuous
-staggered sequence instead of each restarting at index 0. Report the
-first block's count via `onCountChange` and feed it into the second
-block's `startIndex`:
-
-```tsx
-<RevealText text={heading} onCountChange={setHeadlineLineCount} />
-<RevealText text={body} startIndex={headlineLineCount} />
-```
-
-**5. Trigger (`useRevealTrigger`)**
-Visibility is driven by a native `IntersectionObserver` (not a scroll +
-`getBoundingClientRect` listener, which would run on every scroll frame).
-`triggerMargin` (default `0`, typically negative) shrinks the observed
-root the same way a "trigger line" above the true viewport bottom would:
-a more negative value makes the reveal fire earlier, before the element
-reaches the bottom edge. The observer **disconnects after the first
-intersection** — scrolling back up and down again never resets or replays
-the animation.
-
-Two or more blocks can also share one trigger instead of each running its
-own observer, via `isTriggered`:
-
-```tsx
-const [heroRef, isHeroTriggered] = useRevealTrigger<HTMLElement>(-120);
-// ...
-<RevealText text={headline} isTriggered={isHeroTriggered} />
-<RevealText text={body} isTriggered={isHeroTriggered} startIndex={headlineLineCount} />
-```
-
-**6. Reduced motion**
-`useReducedMotion()` swaps `lineVariants` for `reducedLineVariants`, which
-fades opacity in place instead of animating `y`, with a shorter duration
-and a capped stagger — so `prefers-reduced-motion` users still get a
-sense of sequence without the slide/mask motion.
-
 ## Usage: per line vs per word
 
 Both modes go through the same `RevealText` component — only the `by`
@@ -279,3 +209,79 @@ Rules of thumb:
 | `triggerMargin` | `0` | Px before entering the viewport to trigger. |
 | `onCountChange` | — | Reports detected line/word count, for `startIndex` chaining. |
 | `isTriggered` | — | Drives visibility from an external boolean/shared trigger instead of this instance's own observer. |
+
+## How it works (optional)
+
+Everything above is enough to implement and use `RevealText` day to day —
+this section isn't required reading. It's here for when you want to
+understand *why* the component behaves the way it does, e.g. while
+debugging an edge case or extending it.
+
+**1. Line detection (`useDetectedLines`)**
+Before anything is animated, the text is rendered once into an invisible
+"measure" twin (`LineMeasureLayer`) at the element's real width. Each word
+is measured via `offsetTop`, and words sharing a `top` are grouped into a
+detected line. This reads the browser's *actual* wrapping at the current
+viewport width instead of relying on hand-authored line breaks, and
+re-measures on resize (`ResizeObserver`) and once web fonts finish loading
+(`document.fonts.ready`), since font metrics can shift line breaks.
+
+**2. Splitting into lines or words (`by` prop)**
+- `by="line"` (default): each detected line is wrapped in a
+  `.hero-line-mask` (a fixed-height, `overflow: clip` box) containing a
+  `motion.span`. The whole line slides as one unit.
+- `by="word"`: each word gets its own `.hero-word-wrap` clip box and
+  animates independently, with a real (collapsible) space character
+  between words so the browser wraps them exactly like normal text. Word
+  mode is what makes a duplicate-block "word cascade" variant possible
+  alongside the line-based one.
+
+**3. The motion itself (`lineVariants`)**
+Each line/word starts at `y: '200%'` (pushed below its own clip box, so
+it's fully hidden) and animates to `y: '-7%'` with a custom expo-out ease
+(`easeExpoOut`). The `-7%` (not `0%`) is a slight overshoot that keeps the
+settle from reading as abrupt. The clip box (`overflow: clip` +
+negative-margin `padding-bottom: var(--mask-space)`) is what actually
+masks the motion — the line/word is genuinely off-screen within its own
+box, not just faded.
+
+**4. Stagger (`custom` + `Variants`)**
+Each line/word is passed `custom={{ index, duration, stagger, delay }}`,
+and the variant computes its own `transition.delay` as
+`delay + index * stagger`. `index` defaults to the line/word's position,
+but can be offset with `startIndex` — this lets two separate `RevealText`
+blocks (e.g. a heading followed by a paragraph) read as one continuous
+staggered sequence instead of each restarting at index 0. Report the
+first block's count via `onCountChange` and feed it into the second
+block's `startIndex`:
+
+```tsx
+<RevealText text={heading} onCountChange={setHeadlineLineCount} />
+<RevealText text={body} startIndex={headlineLineCount} />
+```
+
+**5. Trigger (`useRevealTrigger`)**
+Visibility is driven by a native `IntersectionObserver` (not a scroll +
+`getBoundingClientRect` listener, which would run on every scroll frame).
+`triggerMargin` (default `0`, typically negative) shrinks the observed
+root the same way a "trigger line" above the true viewport bottom would:
+a more negative value makes the reveal fire earlier, before the element
+reaches the bottom edge. The observer **disconnects after the first
+intersection** — scrolling back up and down again never resets or replays
+the animation.
+
+Two or more blocks can also share one trigger instead of each running its
+own observer, via `isTriggered`:
+
+```tsx
+const [heroRef, isHeroTriggered] = useRevealTrigger<HTMLElement>(-120);
+// ...
+<RevealText text={headline} isTriggered={isHeroTriggered} />
+<RevealText text={body} isTriggered={isHeroTriggered} startIndex={headlineLineCount} />
+```
+
+**6. Reduced motion**
+`useReducedMotion()` swaps `lineVariants` for `reducedLineVariants`, which
+fades opacity in place instead of animating `y`, with a shorter duration
+and a capped stagger — so `prefers-reduced-motion` users still get a
+sense of sequence without the slide/mask motion.
