@@ -13,6 +13,96 @@ npm run build     # typecheck + production build
 npm run preview   # serve the production build locally
 ```
 
+## Implementing the reveal engine in a new project
+
+The engine is one file (`src/RevealText.tsx`) plus a handful of global CSS
+rules — there's no build step or package to publish, just copy both over.
+
+1. **Install the animation dependency.**
+   ```
+   npm install motion
+   ```
+
+2. **Copy `src/RevealText.tsx`** into the target project as-is. It exports
+   `RevealText` (the component) and `useRevealTrigger` (the trigger hook,
+   for cases where a parent needs to drive `isTriggered` itself — see
+   [Trigger](#5-trigger-userevealtrigger) below).
+
+3. **Add the required CSS.** Drop this into a global stylesheet (adjust
+   `--mask-space` and the font-size/line-height values to taste — the
+   exact numbers don't matter, only that every selector below exists):
+   ```css
+   :root {
+     --mask-space: 0.65em; /* clip-box padding; prevents descender clipping */
+   }
+
+   .hero-line-mask {
+     display: block;
+     overflow: clip;
+     padding-bottom: var(--mask-space);
+     margin-bottom: calc(var(--mask-space) * -1);
+   }
+
+   .hero-line {
+     display: block;
+     font-size: 1em;       /* override per block, see step 4 */
+     line-height: 1.2;     /* override per block */
+     white-space: nowrap;
+     transform-origin: 50% 100%;
+     will-change: transform, opacity;
+   }
+
+   .specto-paragraph-word-mode {
+     line-height: 0; /* word mode only: strip the wrapper's own strut */
+   }
+
+   .hero-word-wrap {
+     display: inline-block;
+     overflow: clip;
+     vertical-align: baseline;
+     padding-bottom: var(--mask-space);
+     margin-bottom: calc(var(--mask-space) * -1);
+     padding-right: 0.15em; /* buffer for overhanging glyphs, e.g. "y", "?" */
+     margin-right: -0.15em;
+   }
+
+   .hero-word {
+     display: inline-block;
+   }
+
+   .line-measure {
+     position: absolute;
+     inset: 0;
+     width: 100%;
+     height: 0;
+     overflow: hidden;
+     visibility: hidden;
+     pointer-events: none;
+   }
+   ```
+
+4. **Style each block's typography** with a descendant selector scoped to
+   the `className` you pass in, targeting `.hero-line` — never the
+   `className` alone (see [Required CSS](#required-css) for why):
+   ```css
+   .my-heading .hero-line {
+     font-size: 48px;
+     line-height: 1.05;
+     letter-spacing: -0.02em;
+   }
+   ```
+
+5. **Render it:**
+   ```tsx
+   import { RevealText } from './RevealText';
+
+   <RevealText as="h1" text="Hello world" className="my-heading" />
+   ```
+
+No other setup is needed — `RevealText` manages its own line detection,
+resize/font-load re-measurement, stagger, trigger, and reduced-motion
+fallback internally.
+
 ## The reveal animation: `RevealText`
 
 All of the reveal behavior lives in `src/RevealText.tsx` as a single
@@ -102,6 +192,60 @@ const [heroRef, isHeroTriggered] = useRevealTrigger<HTMLElement>(-120);
 fades opacity in place instead of animating `y`, with a shorter duration
 and a capped stagger — so `prefers-reduced-motion` users still get a
 sense of sequence without the slide/mask motion.
+
+## Usage: per line vs per word
+
+Both modes go through the same `RevealText` component — only the `by`
+prop changes.
+
+**Per line (`by="line"`, the default)** — each detected line slides up as
+one unit. Use this for headlines and body copy where the text should read
+as whole lines settling into place.
+```tsx
+<RevealText
+  as="h1"
+  text="Specto is a design & development studio."
+  className="hero-headline"
+  duration={1.3}
+  stagger={0.06}
+/>
+```
+
+**Per word (`by="word"`)** — each word slides up independently, staggered
+across the whole block regardless of which line it wraps onto. Use this
+for a punchier, word-by-word cascade — it reads faster and more granular
+than line mode, at the cost of a much longer stagger sequence for long
+copy (every word gets its own delay, not just every line).
+```tsx
+<RevealText
+  as="h1"
+  text="Specto is a design & development studio."
+  className="hero-headline"
+  by="word"
+  duration={1.3}
+  stagger={0.02}   // typically much smaller than line-mode stagger —
+                    // a word count is usually 5-10x a line count
+/>
+```
+
+Rules of thumb:
+- **Keep `stagger` small in word mode.** With `stagger={0.06}` (the
+  line-mode default) applied per word, a 10-word headline takes 600ms
+  just to start its last word. Scale `stagger` down roughly in proportion
+  to how many more words than lines the text has.
+- **Both modes accept the same layout/typography CSS** — switching `by`
+  on an existing block doesn't require different styling, only the same
+  `.hero-line` descendant rules from [Required CSS](#required-css) (word
+  mode additionally relies on `.hero-word-wrap` / `.specto-paragraph-word-mode`,
+  which are global and don't need per-block overrides).
+- **Chaining works the same way in both modes** — `onCountChange` reports
+  a line count in line mode and a word count in word mode, so pass it
+  straight through to the next block's `startIndex` regardless of which
+  mode either block uses.
+- **Don't mix `by` on visually stacked/shared-trigger blocks** unless the
+  stagger difference is intentional — e.g. `src/App.tsx`'s hero block and
+  its word-mode duplicate use different `stagger` values on purpose, so
+  the two read at deliberately different paces.
 
 ### Required CSS
 
